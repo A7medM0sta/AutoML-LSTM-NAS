@@ -7,12 +7,6 @@ from cnn import CNN
 from net_manager import NetManager
 from reinforce import Reinforce
 
-import tensorflow as tf
-from tensorflow.keras.layers import Input, LSTM, Dense, Add
-from tensorflow.keras.models import Model
-
-
-# TensorFlow 2.x does not use the deprecated input_data API. Use the updated MNIST dataset loading method.
 from tensorflow.keras.datasets import mnist
 
 
@@ -28,42 +22,34 @@ def parse_args():
 
 
 def policy_network(state, max_layers):
-    # Define the input layer
-    inputs = Input(shape=(4 * max_layers,))
-
-    # Reshape input to add channel dimension
-    x = tf.expand_dims(inputs, -1)  # Add channel dimension
-
-    # Define LSTM layer
-    x = LSTM(4 * max_layers, return_sequences=True)(x)
-
-    # Add bias as a constant
-    bias = tf.Variable(tf.constant([0.05] * 4 * max_layers, dtype=tf.float32))
-    x = Add()([x, bias])
-
-    # Output layer
-    outputs = Dense(4 * max_layers)(x)
-
-    # Create and return the model
-    model = Model(inputs, outputs)
-    return model
+    with tf.name_scope("policy_network"):
+        nas_cell = tf.compat.v1.nn.rnn_cell.NASCell(
+            4 * max_layers
+        )  # Adjust for TensorFlow 2.x
+        outputs, state = tf.compat.v1.nn.dynamic_rnn(
+            nas_cell, tf.expand_dims(state, -1), dtype=tf.float32
+        )
+        bias = tf.Variable([0.05] * 4 * max_layers)
+        outputs = tf.nn.bias_add(outputs, bias)
+        return outputs[:, -1:, :]
 
 
-def train(mnist):
+def train(mnist_data):
     global args
-    sess = tf.compat.v1.Session()
+
     global_step = tf.Variable(0, trainable=False)
-    starter_learning_rate = 0.1
-    learning_rate = tf.compat.v1.train.exponential_decay(
-        starter_learning_rate, global_step, 500, 0.96, staircase=True
+    learning_rate = tf.keras.optimizers.schedules.ExponentialDecay(
+        initial_learning_rate=0.1, decay_steps=500, decay_rate=0.96, staircase=True
     )
+    optimizer = tf.keras.optimizers.RMSprop(learning_rate=learning_rate)
 
-    optimizer = tf.compat.v1.train.RMSPropOptimizer(learning_rate=learning_rate)
-
-    # Pass the policy_network function
     reinforce = Reinforce(optimizer, policy_network, args.max_layers, global_step)
     net_manager = NetManager(
-        num_input=784, num_classes=10, learning_rate=0.001, mnist=mnist, batch_size=100
+        num_input=784,
+        num_classes=10,
+        learning_rate=0.001,
+        mnist=mnist_data,
+        batch_size=100,
     )
 
     MAX_EPISODES = 2500
@@ -73,17 +59,14 @@ def train(mnist):
     total_rewards = 0
     for i_episode in range(MAX_EPISODES):
         action = reinforce.get_action(state)
-        print("ca:", action)
         if all(ai > 0 for ai in action[0][0]):
             reward, pre_acc = net_manager.get_reward(action, step, pre_acc)
-            print("=====>", reward, pre_acc)
         else:
             reward = -1.0
         total_rewards += reward
 
-        # In our sample action is equal state
         state = action[0]
-        reinforce.store_rollout(state, reward)
+        reinforce.storeRollout(state, reward)
 
         step += 1
         ls = reinforce.train_step(1)
@@ -100,9 +83,8 @@ def train(mnist):
             + str(reward)
             + "\n"
         )
-        log = open("lg3.txt", "a+")
-        log.write(log_str)
-        log.close()
+        with open("lg3.txt", "a+") as log:
+            log.write(log_str)
         print(log_str)
 
 
@@ -110,7 +92,6 @@ def main():
     global args
     args = parse_args()
 
-    # Load MNIST dataset using TensorFlow 2.x method
     mnist_data = mnist.load_data()
     train(mnist_data)
 
