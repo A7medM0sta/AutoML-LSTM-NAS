@@ -23,21 +23,22 @@ def parse_args():
 
 
 
+
 def policy_network(state, max_layers):
     # Define the policy network using the Keras Functional API
     inputs = tf.keras.Input(shape=(4 * max_layers,))
     x = tf.expand_dims(inputs, -1)  # Add channel dimension
 
-    # Define NASCell equivalent (or use a different Keras layer if NASCell is not available)
-    nas_cell = tf.keras.layers.LSTM(4 * max_layers, return_sequences=True)(x)
+    # Define LSTM or other cells as needed
+    x = tf.keras.layers.LSTM(4 * max_layers, return_sequences=True)(x)
     bias = tf.Variable(tf.constant([0.05] * 4 * max_layers, dtype=tf.float32))
-    x = tf.keras.layers.Add()([nas_cell, bias])
+    x = tf.keras.layers.Add()([x, bias])
 
     # Output layer
     outputs = tf.keras.layers.Dense(4 * max_layers)(x)
     model = tf.keras.Model(inputs, outputs)
 
-    return model(inputs)
+    return model
 
 
 def train(mnist_data):

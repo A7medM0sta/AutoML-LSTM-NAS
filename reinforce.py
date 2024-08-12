@@ -5,7 +5,7 @@ class Reinforce:
     def __init__(
         self,
         optimizer,
-        policy_network,
+        policy_network_fn,
         max_layers,
         global_step,
         division_rate=100.0,
@@ -14,12 +14,13 @@ class Reinforce:
         exploration=0.3,
     ):
         self.optimizer = optimizer
-        self.policy_network = policy_network
+        self.policy_network_fn = policy_network_fn
+        self.max_layers = max_layers
+        self.global_step = global_step
         self.division_rate = division_rate
         self.reg_param = reg_param
         self.discount_factor = discount_factor
-        self.max_layers = max_layers
-        self.global_step = global_step
+        self.exploration = exploration
 
         self.reward_buffer = []
         self.state_buffer = []
@@ -32,12 +33,14 @@ class Reinforce:
                 [1, 4 * self.max_layers], minval=1, maxval=35, dtype=tf.int32
             )
         else:
-            return self.policy_network(state)
+            return self.policy_network_fn(state, self.max_layers)
 
     def create_variables(self):
         self.states = tf.keras.Input(shape=(self.max_layers * 4,))
 
         with tf.name_scope("predict_actions"):
+            # Create the policy network
+            self.policy_network = self.policy_network_fn
             self.policy_outputs = self.policy_network(self.states)
 
         self.action_scores = tf.identity(self.policy_outputs, name="action_scores")
@@ -45,9 +48,9 @@ class Reinforce:
             self.action_scores * self.division_rate, tf.int32, name="predicted_action"
         )
 
+        # Define loss and training operations
         self.discounted_rewards = tf.keras.Input(shape=(None,))
 
-        # Compute loss and gradients
         self.cross_entropy_loss = tf.keras.losses.SparseCategoricalCrossentropy(
             from_logits=True
         )
@@ -59,7 +62,7 @@ class Reinforce:
                 tf.reduce_sum(tf.square(x))
                 for x in self.policy_network.trainable_variables
             ]
-        )  # Regularization
+        )
         self.loss = self.pg_loss + self.reg_param * self.reg_loss
 
         with tf.name_scope("train_policy_network"):
