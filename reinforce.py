@@ -1,6 +1,3 @@
-import tensorflow as tf
-
-
 class Reinforce:
     def __init__(
         self,
@@ -27,21 +24,12 @@ class Reinforce:
 
         self.create_variables()
 
-    def get_action(self, state):
-        if tf.random.uniform([]) < self.exploration:
-            return tf.random.uniform(
-                [1, 4 * self.max_layers], minval=1, maxval=35, dtype=tf.int32
-            )
-        else:
-            return self.policy_network_fn(state, self.max_layers)
-
     def create_variables(self):
-        self.states = tf.keras.Input(shape=(self.max_layers * 4,))
+        self.states = Input(shape=(self.max_layers * 4,))
 
-        with tf.name_scope("predict_actions"):
-            # Create the policy network
-            self.policy_network = self.policy_network_fn
-            self.policy_outputs = self.policy_network(self.states)
+        # Create the policy network
+        self.policy_network = self.policy_network_fn(self.states, self.max_layers)
+        self.policy_outputs = self.policy_network(self.states)
 
         self.action_scores = tf.identity(self.policy_outputs, name="action_scores")
         self.predicted_action = tf.cast(
@@ -49,7 +37,7 @@ class Reinforce:
         )
 
         # Define loss and training operations
-        self.discounted_rewards = tf.keras.Input(shape=(None,))
+        self.discounted_rewards = Input(shape=(None,))
 
         self.cross_entropy_loss = tf.keras.losses.SparseCategoricalCrossentropy(
             from_logits=True
@@ -69,6 +57,14 @@ class Reinforce:
             self.train_op = self.optimizer.minimize(
                 self.loss, var_list=self.policy_network.trainable_variables
             )
+
+    def get_action(self, state):
+        if tf.random.uniform([]) < self.exploration:
+            return tf.random.uniform(
+                [1, 4 * self.max_layers], minval=1, maxval=35, dtype=tf.int32
+            )
+        else:
+            return self.policy_network(self.states)
 
     def store_rollout(self, state, reward):
         self.reward_buffer.append(reward)
