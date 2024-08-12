@@ -1,3 +1,6 @@
+import tensorflow as tf
+from tensorflow.keras.layers import Input, LSTM, Dense, Add
+from tensorflow.keras.models import Model
 class Reinforce:
     def __init__(
         self,
